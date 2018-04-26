@@ -1,0 +1,24 @@
+{
+  "root": true,
+  "parser": "babel-eslint",
+  "extends": "standard",
+  "parserOptions": {
+    "sourceType": "module"
+  },
+  "globals": {
+    "chrome": true
+  },
+  "env": {
+    "browser": true
+  },
+  "plugins": [
+    "html",
+    "babel"
+  ],
+  "rules": {
+    "arrow-parens": "off",
+    "generator-star-spacing": "off",
+    "semi": "off",
+    "no-unused-vars": "error"
+  }
+}
