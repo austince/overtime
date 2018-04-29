@@ -1,6 +1,6 @@
 // the only difference between this and the regular model, is that we've set
 // eigenvector 9 and 11 to not be regularized. This is to better detect motion of the eyebrows
-export default {
+export const PCAEmotionalModel = {
     "scoring": {
         "size": [20, 22],
         "bias": -1.3970965781063711,

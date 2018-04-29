@@ -1,4 +1,4 @@
-export default {
+export const PCABasicModel = {
     "scoring": {
         "size": [20, 22],
         "bias": -1.3970965781063711,

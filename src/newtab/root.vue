@@ -1,5 +1,5 @@
 
-<style lang="scss">
+<style lang="scss" scoped>
     @import '~sass-material-colors';
     @import '../base';
 
@@ -26,11 +26,8 @@
 
     #capture {
         z-index: 1;
-    }
-
-    #capture photo-prompt {
-        width: $photo-height;
-        height: $photo-width;
+        width: 50%;
+        height: 50%;
     }
 
     #photo-wall {
@@ -67,6 +64,8 @@
 
         <section id="capture">
             <photo-prompt
+                    width="640"
+                    height="480"
                     v-if="needsPhotoPrompt"
                     @photoTaken="handlePhoto">
             </photo-prompt>
@@ -87,7 +86,7 @@
   import chromep from 'chrome-promise'
 
   import {captureVideoFrame} from '../util/captureVideoFrame'
-  import Photo from '../util/Photo'
+  import Photo from '../util/db-models/photo'
   import {PhotosDB} from '../util/db'
   import PhotoPrompt from '../components/PhotoPrompt'
 
@@ -149,7 +148,7 @@
         this.photos.push(photo)
 
         await chromep.storage.local.set({[photo.localStorageKey]: photo.data})
-        await PhotosDB.add(photo)
+        await PhotosDB.add(Photo.copyForDB(photo))
 
         await chromep.storage.local.set({LAST_PHOTO_KEY: photo.timestamp})
       },
@@ -167,7 +166,6 @@
       }
     },
     components: {
-      PhotoPrompt,
       'photo-prompt': PhotoPrompt,
     }
   }

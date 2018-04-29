@@ -1,13 +1,15 @@
 export default class EmotionalClassifier {
-  constructor (model) {
-    if (model) {
-      this.init(model)
-    }
-
+  constructor (model, minConfidence = 0.05, meanSample = 10) {
     this.previousParameters = []
     this.emotions = []
     this.classifier = {}
-    this.coefficientLength = 0;
+    this.coefficientLength = 0
+    this.minConfidence = minConfidence
+    this.meanSampleSize = meanSample
+
+    if (model) {
+      this.init(model)
+    }
   }
 
   init (model) {
@@ -46,19 +48,31 @@ export default class EmotionalClassifier {
 
       prediction[i] = {
         emotion,
-        'value': 0.0
+        value: 1.0 / (1.0 + Math.exp(-score))
       }
-      prediction[i].value = 1.0 / (1.0 + Math.exp(-score))
+
+      if (prediction[i].value < this.minConfidence) {
+        prediction[i].value = 0
+      }
     }
     return prediction
   }
 
+  /**
+   * Todo: make this better like so:
+   * each call, update the mean parameters
+   * always return a prediction of those mean params
+   *
+   *
+   * @param parameters
+   * @return {Array}
+   */
   meanPredict (parameters) {
     // store to array of 10 previous parameters
-    this.previousParameters.splice(0, this.previousParameters.length == 10 ? 1 : 0)
+    this.previousParameters.splice(0, this.previousParameters.length === this.meanSampleSize ? 1 : 0)
     this.previousParameters.push(parameters.slice(0))
 
-    if (this.previousParameters.length > 9) {
+    if (this.previousParameters.length >= this.meanSampleSize) {
       // calculate mean of parameters?
       let meanParameters = []
 
@@ -73,13 +87,13 @@ export default class EmotionalClassifier {
       }
 
       for (let i = 0; i < parameters.length; i++) {
-        meanParameters[i] /= 10
+        meanParameters[i] /= this.meanSampleSize
       }
 
       // calculate logistic regression
       return this.predict(meanParameters)
     } else {
-      return false
+      return this.predict(parameters)
     }
   }
 }
