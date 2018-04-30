@@ -7,6 +7,8 @@
 </template>
 
 <style lang="scss">
+    @import '../reset';
+
     .commands {
         display: flex;
         align-items: center;
