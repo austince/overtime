@@ -1,8 +1,9 @@
 import Dexie from 'dexie'
+import chromep from 'chrome-promise'
 import Photo from './db-models/photo'
 
 const DB_NAME = 'overtime'
-const DB_VERSION = 4
+const DB_VERSION = 5
 
 const db = new Dexie(DB_NAME)
 
@@ -46,20 +47,116 @@ db.version(4)
   .upgrade(trans => {
     trans.photos.toCollection()
       .modify(photo => {
-        photo.emotion = "unclassified"
-        photo.emotionValue = 0.0
+        if (!photo.emotion) {
+          photo.emotion = 'unclassified'
+          photo.emotionValue = 0.0
+        }
       })
+  })
+
+db.version(5)
+  .stores({
+    photos: '++id, &timestamp, emotion, emotionValue', // store photo meta data
+    images: '++id, photoId' /* non-index fields: data */ // stores actual image data of photo
+  })
+  .upgrade(async trans => {
+    const imagesToAdd = []
+    await trans.photos.toCollection()
+      .modify(photo => {
+        if (!photo.emotion) {
+          photo.emotion = 'unclassified'
+          photo.emotionValue = 0.0
+        }
+
+        // Add here, don't do async within transaction
+        imagesToAdd.push({
+          photoId: photo.id,
+          _photoLocalKey: photo.localStorageKey,
+        })
+
+        delete photo.localStorageKey
+      })
+
+    await Promise.all(imagesToAdd.map(async imgObj => {
+      const res = await chromep.storage.local.get([imgObj._photoLocalKey])
+      imgObj.data = res[imgObj._photoLocalKey]
+      delete imgObj._photoLocalKey
+    }))
+
+    trans.images.bulkAdd(imagesToAdd)
+  })
+
+// Changes:
+//  - Don't index every column, just indices
+//  - Make timestamps unique
+//  - add images table
+db.version(6)
+  .stores({
+    photos: '++id, &timestamp, emotion, emotionValue', // store photo meta data
+    images: '++id, photoId' /* non-index fields: data */ // stores actual image data of photo
+  })
+  .upgrade(async trans => {
+    const imagesToAdd = []
+    await trans.photos.toCollection()
+      .modify(photo => {
+        if (!photo.emotion) {
+          photo.emotion = 'unclassified'
+          photo.emotionValue = 0.0
+        }
+
+        // Add here, don't do async within transaction
+        imagesToAdd.push({
+          photoId: photo.id,
+          _photoLocalKey: photo.localStorageKey,
+        })
+
+        delete photo.localStorageKey
+      })
+
+    await Promise.all(imagesToAdd.map(async imgObj => {
+      const res = await chromep.storage.local.get([imgObj._photoLocalKey])
+      imgObj.data = res[imgObj._photoLocalKey]
+      delete imgObj._photoLocalKey
+    }))
+
+    trans.images.bulkAdd(imagesToAdd)
   })
 
 db.photos.mapToClass(Photo)
 
-const PhotosDB = db.photos
+/**
+ * https://github.com/dfahlander/Dexie.js/issues/232
+ *
+ * @param photoCollection
+ * @return {Dexie.Promise<any>}
+ */
+export function joinImages (photoCollection) {
+  return db.transaction('r', PhotosDB, ImagesDB, async () => {
+    return photoCollection.toArray(photos => {
+      const imagesProm = photos.map(photo => {
+        return ImagesDB.where('photoId').equals(photo.id).toArray()
+      })
+
+      return Promise.all(imagesProm).then(images => {
+        // Attach
+        photos.forEach((photo, i) => {
+          photo.data = images[i][0].data
+        })
+
+        return photos
+      })
+
+    })
+  })
+}
+
+export const PhotosDB = db.photos
+export const ImagesDB = db.images
 
 export default db
 
 export {
   DB_NAME,
   DB_VERSION,
-  PhotosDB,
   db,
 }

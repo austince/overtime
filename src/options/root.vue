@@ -1,7 +1,7 @@
 <template>
     <main>
         <section class="commands">
-            <button @click="deleteAllPhotos">Delete All Photos?</button>
+            <button ref="deleteBtn" @click="deleteAllPhotos">Delete All Photos?</button>
         </section>
     </main>
 </template>
@@ -19,7 +19,7 @@
 
 <script>
   import chromep from 'chrome-promise'
-  import {PhotosDB} from '../util/db'
+  import {PhotosDB, ImagesDB} from '../util/db'
 
   export default {
     data () {
@@ -32,17 +32,18 @@
     },
     methods: {
       async deleteAllPhotos (event) {
-        const btn = event.target
-        btn.disabled = true
+        event.preventDefault()
 
-        btn.innerText = 'Deleting...'
+        this.$refs.deleteBtn.disabled = true
+        this.$refs.deleteBtn.innerText = 'Deleting...'
 
         await Promise.all([
           PhotosDB.clear(),
+          ImagesDB.clear(),
           chromep.storage.local.clear(),
         ])
 
-        btn.innerText = 'Deleted!'
+        this.$refs.deleteBtn.innerText = 'Deleted!'
       }
     }
   }

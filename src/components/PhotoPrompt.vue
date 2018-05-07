@@ -134,7 +134,6 @@
 
         const timestamp = Date.now().toString()
         const photo = new Photo({
-          localStorageKey: timestamp,
           position: {
             x: faceData.x,
             y: faceData.y,

@@ -12,6 +12,10 @@
         height: calc(100% + #{$photo-height});
     }
 
+    body {
+        overflow-y: hidden;
+    }
+
     #bg {
         position: fixed;
         width: 100%;
@@ -90,10 +94,13 @@
 <script>
   import chromep from 'chrome-promise'
   import clm from 'clmtrackr'
+  import {Lock} from 'semaphore-async-await'
 
   import {captureVideoFrame} from '../util/captureVideoFrame'
   import Photo from '../util/db-models/photo'
-  import {PhotosDB} from '../util/db'
+  import OvertimeImage from '../util/db-models/overtime-image'
+
+  import {ImagesDB, PhotosDB, joinImages} from '../util/db'
   import PhotoPrompt from '../components/PhotoPrompt'
   import {EmotionsModel, PCAEmotionalModel} from '../util/face-models'
   import EmotionClassifier from '../util/emotion-classifier'
@@ -117,36 +124,18 @@
     },
     computed: {},
     created () {
-      console.log('Created')
+      console.log('Created root app')
       this.loadPhotos()
       this.emotionClassifier = new EmotionClassifier(EmotionsModel)
-      this.clmTracker = new clm.tracker({stopOnConvergende: true})
+      this.clmTracker = new clm.tracker({stopOnConvergence: true})
       this.clmTracker.init(PCAEmotionalModel, {useWebGL: true})
     },
     mounted () {
       this.checkIfNeedsPhoto()
     },
     methods: {
-      async takePhoto () {
-        const {dataUri: img} = captureVideoFrame('video', 'png')
-
-        const timestamp = Date.now().toString()
-
-        await chromep.storage.local.set({[timestamp]: img})
-
-        const photo = new Photo({localStorageKey: timestamp, timestamp})
-        await PhotosDB.add(photo)
-
-        const queryRes = await chromep.storage.local.get([timestamp])
-
-        photo.data = queryRes[timestamp]
-
-        this.photos.push(photo)
-      },
-
       async checkIfNeedsPhoto () {
         const res = await chromep.storage.local.get([LAST_PHOTO_KEY])
-        console.log(res[LAST_PHOTO_KEY])
         if (!res[LAST_PHOTO_KEY] || dateDiffInMins(new Date(res[LAST_PHOTO_KEY])) >= 0.5) {
           this.needsPhotoPrompt = true
         }
@@ -155,56 +144,89 @@
 
       async handlePhoto (photo) {
         this.needsPhotoPrompt = false
+        const updateLock = new Lock()
 
         this.photos.push(photo)
 
-        // Todo: move to background script
+        photo.id = await PhotosDB.add(Photo.copyForDB(photo))
+
+        // Add the image to the DB as well
+        const imgToAdd = new OvertimeImage({photoId: photo.id, data: photo.data})
+        imgToAdd.id = await ImagesDB.add(imgToAdd)
+
+        await chromep.storage.local.set({LAST_PHOTO_KEY: photo.timestamp})
+
+        const getMaxEmotion = (emotionData) => {
+          return emotionData.reduce((em, otherEm) => {
+            return em.value >= otherEm.value ? em : otherEm
+          }, {value: -1}) // there will always be a value > -1
+        }
+
+        /**
+         * @critical
+         * @param emotionData
+         * @return {Promise<void>}
+         */
+        const updatePhotoEmotion = async (emotionData) => {
+          const maxEmotion = getMaxEmotion(emotionData)
+          photo.setEmotion(maxEmotion)
+          // Enter
+          await updateLock.acquire()
+
+          try {
+            console.log(`Updating emotion of ${photo.id} to ${maxEmotion.emotion}:${maxEmotion.value}`)
+            await PhotosDB.update(photo.id, {emotion: maxEmotion})
+            console.log(`Updated emotion of ${photo.id}`)
+          } finally {
+            updateLock.release()
+          }
+        }
+
+        // Todo: move to background script, or web worker?
         let emotionData
         try {
           console.log('Detecting emotions!')
-          emotionData = await this.detectEmotions(photo)
-          console.log('CONVERGED', emotionData)
+          emotionData = await this.detectEmotions(photo, {onIteration: updatePhotoEmotion})
+          console.log('CONVERGED')
+
         } catch ([message, errorEvent, emotions]) {
+
           console.error(message, errorEvent, emotions)
           emotionData = emotions
+
         } finally {
           console.log('Final emotions:', emotionData)
-          const maxEmotion = emotionData.reduce((em, otherEm) => {
-            return em.value >= otherEm.value ? em : otherEm
-          }, {value: -1}) // there will always be a value > -1
-
-          console.log('Final max emotion:', maxEmotion)
-          photo.setEmotion(maxEmotion)
+          await updatePhotoEmotion(emotionData)
         }
 
-        // Reset so that the next photo will be a new detection
-        this.clmTracker.reset()
-
-        await chromep.storage.local.set({[photo.localStorageKey]: photo.data})
-        await PhotosDB.add(Photo.copyForDB(photo))
-
-        await chromep.storage.local.set({LAST_PHOTO_KEY: photo.timestamp})
+        // Reset so that the next photo will be a new detection,
+        // if we decided to take multiple photos per new tab  session
+        // ya know, if
+        // this.clmTracker.reset()
       },
 
       /**
        *
        * @param {Photo}photo
+       * @param onIteration
        * @param maxIterations
        * @return {Promise<any>}
        */
-      detectEmotions (photo, maxIterations = 50) {
+      detectEmotions (photo, {
+        onIteration = (emotions) => {
+        },
+        maxIterations = 50
+      }) {
         return new Promise(((resolve, reject) => {
           let emotionData = this.emotionClassifier.blankPrediction()
 
           const successHandler = (event) => {
-            this.clmTracker.stop()
-            tearDownHandlers()
+            cleanup()
             resolve(emotionData)
           }
 
           const errorHandler = (event) => {
-            this.clmTracker.stop()
-            tearDownHandlers()
+            cleanup()
             reject(['Emotion detection problem!', event.type, emotionData])
           }
 
@@ -214,16 +236,15 @@
 
             const cp = this.clmTracker.getCurrentParameters()
             emotionData = this.emotionClassifier.meanPredict(cp)
-            console.log('Iteration', iteration, emotionData)
+            onIteration(emotionData)
 
             if (iteration > maxIterations) {
-              this.clmTracker.stop()
-              tearDownHandlers()
+              cleanup()
               reject(['Max iterations reached', event.type, emotionData])
             }
           }
 
-          const handlers = {
+          const eventHandlers = {
             'clmtrackrConverged': successHandler,
             'clmtrackrIteration': progressHandler,
             'clmtrackrLost': errorHandler,
@@ -231,23 +252,26 @@
           }
 
           const setupHandlers = () => {
-            for (const [eventType, handler] of Object.entries(handlers)) {
+            for (const [eventType, handler] of Object.entries(eventHandlers)) {
               document.addEventListener(eventType, handler)
             }
-            console.log("Done handler setup")
+            console.log('Done handler setup')
           }
 
-          const tearDownHandlers = () => {
-            for (const [eventType, handler] of Object.entries(handlers)) {
+          const cleanup = () => {
+            this.clmTracker.stop()
+
+            for (const [eventType, handler] of Object.entries(eventHandlers)) {
               document.removeEventListener(eventType, handler)
             }
-            console.log("Done handler teardown")
+            console.log('Done handler teardown')
           }
 
           setupHandlers()
 
           const img = new Image()
           img.onload = (function () {
+            // give the clm tracker a hint to where the face is
             const faceBox = [
               photo.position.x,
               photo.position.y,
@@ -263,15 +287,14 @@
       },
 
       async loadPhotos () {
-        PhotosDB
+        const col = PhotosDB
           .orderBy('timestamp')
           .limit(100)
-          .each(async (photo) => {
-            // Attach image from local storage
-            const res = await chromep.storage.local.get([photo.localStorageKey])
-            photo.data = res[photo.localStorageKey]
-            this.photos.push(photo)
-          })
+        const photos = await joinImages(col)
+
+        photos.forEach(photo => {
+          this.photos.push(photo)
+        })
       }
     },
     components: {

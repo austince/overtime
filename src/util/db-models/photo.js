@@ -2,8 +2,9 @@ import cloneDeep from 'lodash/cloneDeep'
 
 export default class Photo {
   constructor ({id, localStorageKey, timestamp, data, position, faceWidth, faceHeight}) {
-    this.id = id
-    this.localStorageKey = localStorageKey
+    if (id) {
+      this.id = id
+    }
     this.timestamp = timestamp
     this.position = position
     this.data = data || null
@@ -16,9 +17,14 @@ export default class Photo {
     this.emotionValue = value
   }
 
-  static copyForDB (photo) {
+  static copyForDB (photo, keepId = false) {
     const toSave = cloneDeep(photo)
-    const toDel = ['data', 'id', 'width', 'height']
+    const toDel = ['data', 'width', 'height']
+
+    if (!keepId) {
+      toDel.push('id')
+    }
+
     for (let key of toDel) {
       delete toSave[key]
     }
