@@ -87,39 +87,11 @@ db.version(5)
   })
 
 // Changes:
-//  - Don't index every column, just indices
-//  - Make timestamps unique
-//  - add images table
+//  - Unique photo id
 db.version(6)
   .stores({
     photos: '++id, &timestamp, emotion, emotionValue', // store photo meta data
-    images: '++id, photoId' /* non-index fields: data */ // stores actual image data of photo
-  })
-  .upgrade(async trans => {
-    const imagesToAdd = []
-    await trans.photos.toCollection()
-      .modify(photo => {
-        if (!photo.emotion) {
-          photo.emotion = 'unclassified'
-          photo.emotionValue = 0.0
-        }
-
-        // Add here, don't do async within transaction
-        imagesToAdd.push({
-          photoId: photo.id,
-          _photoLocalKey: photo.localStorageKey,
-        })
-
-        delete photo.localStorageKey
-      })
-
-    await Promise.all(imagesToAdd.map(async imgObj => {
-      const res = await chromep.storage.local.get([imgObj._photoLocalKey])
-      imgObj.data = res[imgObj._photoLocalKey]
-      delete imgObj._photoLocalKey
-    }))
-
-    trans.images.bulkAdd(imagesToAdd)
+    images: '++id, &photoId' /* non-index fields: data */ // stores actual image data of photo
   })
 
 db.photos.mapToClass(Photo)
@@ -140,7 +112,12 @@ export function joinImages (photoCollection) {
       return Promise.all(imagesProm).then(images => {
         // Attach
         photos.forEach((photo, i) => {
-          photo.data = images[i][0].data
+          if (typeof images[i][0] !== 'undefined') {
+            photo.data = images[i][0].data
+          } else {
+            // todo: remove this photo!
+            photo.data = null
+          }
         })
 
         return photos

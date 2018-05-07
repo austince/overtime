@@ -1,10 +1,10 @@
 <style lang="scss">
-    @import '~sass-material-colors';
     @import '../base';
     @import '../reset';
 
     $photo-width: 320px;
     $photo-height: 240px;
+
     $bg-color: material-color('blue-grey', '900');
 
     @mixin picture-overflow-height {
@@ -37,6 +37,7 @@
         z-index: 1;
         width: 640px;
         height: 480px;
+        visibility: hidden;
     }
 
     #photo-wall {
@@ -57,10 +58,6 @@
         height: $photo-height / 2;
     }
 
-    img {
-        width: 100%;
-        height: 100%;
-    }
 
 </style>
 
@@ -68,7 +65,6 @@
 
     <main id="app">
         <section id="bg">
-
         </section>
 
         <section id="capture">
@@ -84,7 +80,9 @@
         <section id="photo-wall">
             <div class="photo"
                  v-for="photo of photos">
-                <img :src="photo.data">
+                <img-thumbnail :photo="photo"
+                               :tracker="thumbnailTracker">
+                </img-thumbnail>
             </div>
         </section>
     </main>
@@ -96,17 +94,19 @@
   import clm from 'clmtrackr'
   import {Lock} from 'semaphore-async-await'
 
+  import PhotoPromptComponent from '../components/PhotoPrompt'
+  import ThumbnailComponent from '../components/Thumbnail'
+
   import {captureVideoFrame} from '../util/captureVideoFrame'
   import Photo from '../util/db-models/photo'
   import OvertimeImage from '../util/db-models/overtime-image'
-
   import {ImagesDB, PhotosDB, joinImages} from '../util/db'
-  import PhotoPrompt from '../components/PhotoPrompt'
   import {EmotionsModel, PCAEmotionalModel} from '../util/face-models'
   import EmotionClassifier from '../util/emotion-classifier'
 
   const LAST_PHOTO_KEY = 'LAST_PHOTO'
   const MS_PER_MIN = 1000 * 60
+  const MINS_BETWEEN_PHOTOS = 5
 
   function dateDiffInMins (date, other = (new Date())) {
     const utc1 = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
@@ -127,8 +127,11 @@
       console.log('Created root app')
       this.loadPhotos()
       this.emotionClassifier = new EmotionClassifier(EmotionsModel)
-      this.clmTracker = new clm.tracker({stopOnConvergence: true})
-      this.clmTracker.init(PCAEmotionalModel, {useWebGL: true})
+      this.clmTracker = new clm.tracker({stopOnConvergence: true, useWebGL: true})
+      this.clmTracker.init(PCAEmotionalModel)
+
+      this.thumbnailTracker = new clm.tracker({useWebGL: true})
+      this.thumbnailTracker.init(PCAEmotionalModel)
     },
     mounted () {
       this.checkIfNeedsPhoto()
@@ -136,7 +139,8 @@
     methods: {
       async checkIfNeedsPhoto () {
         const res = await chromep.storage.local.get([LAST_PHOTO_KEY])
-        if (!res[LAST_PHOTO_KEY] || dateDiffInMins(new Date(res[LAST_PHOTO_KEY])) >= 0.5) {
+        console.log(res)
+        if (!res[LAST_PHOTO_KEY] || dateDiffInMins(new Date(res[LAST_PHOTO_KEY])) >= MINS_BETWEEN_PHOTOS) {
           this.needsPhotoPrompt = true
         }
         console.log(`Done photo check. Needs prompt? ${this.needsPhotoPrompt}`)
@@ -146,7 +150,8 @@
         this.needsPhotoPrompt = false
         const updateLock = new Lock()
 
-        this.photos.push(photo)
+        // insert at head, as newest -> oldest
+        this.photos.splice(0, 0, photo)
 
         photo.id = await PhotosDB.add(Photo.copyForDB(photo))
 
@@ -163,20 +168,21 @@
         }
 
         /**
+         * Todo: only use the most recent, toss the rest if any
          * @critical
          * @param emotionData
          * @return {Promise<void>}
          */
         const updatePhotoEmotion = async (emotionData) => {
-          const maxEmotion = getMaxEmotion(emotionData)
-          photo.setEmotion(maxEmotion)
-          // Enter
+          const {emotion, value} = getMaxEmotion(emotionData)
+          photo.setEmotion({emotion, value})
+          // Enter the crit zone
           await updateLock.acquire()
 
           try {
-            console.log(`Updating emotion of ${photo.id} to ${maxEmotion.emotion}:${maxEmotion.value}`)
-            await PhotosDB.update(photo.id, {emotion: maxEmotion})
-            console.log(`Updated emotion of ${photo.id}`)
+            // console.log(`Updating emotion of ${photo.id} to ${emotion}:${value}`)
+            await PhotosDB.update(photo.id, {emotion, emotionValue: value})
+            // console.log(`Updated emotion of ${photo.id}`)
           } finally {
             updateLock.release()
           }
@@ -253,7 +259,7 @@
 
           const setupHandlers = () => {
             for (const [eventType, handler] of Object.entries(eventHandlers)) {
-              document.addEventListener(eventType, handler)
+              document.addEventListener(eventType, handler, true)
             }
             console.log('Done handler setup')
           }
@@ -262,7 +268,7 @@
             this.clmTracker.stop()
 
             for (const [eventType, handler] of Object.entries(eventHandlers)) {
-              document.removeEventListener(eventType, handler)
+              document.removeEventListener(eventType, handler, true)
             }
             console.log('Done handler teardown')
           }
@@ -272,14 +278,7 @@
           const img = new Image()
           img.onload = (function () {
             // give the clm tracker a hint to where the face is
-            const faceBox = [
-              photo.position.x,
-              photo.position.y,
-              photo.faceWidth,
-              photo.faceHeight,
-            ]
-
-            this.clmTracker.start(img, faceBox)
+            this.clmTracker.start(img, photo.getFaceBox())
           }).bind(this)
 
           img.src = photo.data
@@ -290,6 +289,8 @@
         const col = PhotosDB
           .orderBy('timestamp')
           .limit(100)
+          .reverse()
+
         const photos = await joinImages(col)
 
         photos.forEach(photo => {
@@ -298,7 +299,8 @@
       }
     },
     components: {
-      'photo-prompt': PhotoPrompt,
+      [PhotoPromptComponent.is]: PhotoPromptComponent,
+      [ThumbnailComponent.is]: ThumbnailComponent,
     }
   }
 </script>

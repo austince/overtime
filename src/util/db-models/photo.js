@@ -17,6 +17,15 @@ export default class Photo {
     this.emotionValue = value
   }
 
+  getFaceBox() {
+    return [
+      this.position.x,
+      this.position.y,
+      this.faceWidth,
+      this.faceHeight,
+    ]
+  }
+
   static copyForDB (photo, keepId = false) {
     const toSave = cloneDeep(photo)
     const toDel = ['data', 'width', 'height']
