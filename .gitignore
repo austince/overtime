@@ -12,3 +12,9 @@ yarn.lock
 # Backpack build
 build
 
+# Packed builds
+*.crx
+
+# private keys
+*.pem
+*.crt
