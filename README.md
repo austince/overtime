@@ -1,5 +1,5 @@
 <div align="center">
-<img src="./screenshots/overtime.png" height="500" >  
+<img src="./static/icons/icon512.png" height="512" >  
 </div>  
 <br><br>
 
@@ -10,6 +10,11 @@ _Overtime_ is a Chrome extension that help you keep track of your emotions when 
 least expect it. Well, ok, when you forget opening a new tab.
 
 ## Screenshots
+
+<div align="center">
+<img src="./screenshots/overtime.png" height="400" >  
+</div>  
+<br>
 
 <div align="center">
 <img src="./screenshots/overtime-unknown.png" height="400">
