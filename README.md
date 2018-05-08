@@ -1,7 +1,6 @@
 <div align="center">
 <img src="./static/icons/icon128.png" height="126" >  
 </div>  
-<br><br>
 
 # Overtime
 
