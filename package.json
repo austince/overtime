@@ -1,10 +1,10 @@
 {
-  "name": "vue-chrome-extension-template",
-  "version": "0.0.1",
-  "description": "vue.js chrome extension template (wcer)",
-  "author": "works.yura@gmail.com",
+  "name": "overtime",
+  "version": "1.0.1",
+  "description": "Chrome New Tab Extension",
+  "author": "austin.cawley@gmail.com",
   "license": "MIT",
-  "private": false,
+  "private": true,
   "dependencies": {
     "bootstrap": "^4.1.0",
     "chrome-promise": "^3.0.0",
@@ -25,7 +25,9 @@
     "lint": "eslint --ext .js,.vue src",
     "dev": "webpack --config ./core/webpack.dev.js --hide-modules",
     "dev:no-reload": "yarn run dev --env.no_reload=true",
-    "build": "webpack --config ./core/webpack.prod.js -p --progress  --hide-modules --colors"
+    "clean": "rm -rf build overtime.zip *.crx",
+    "build": "webpack --config ./core/webpack.prod.js -p --progress  --hide-modules --colors",
+    "build:upload": "yarn build && zip -r overtime.zip ./build"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.64",

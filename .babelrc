@@ -16,6 +16,6 @@
     }
   },
   "ignore": [
-    "./src/util/face-models/**/*.js"
+    "**/face-models/**/*.js"
   ]
 }

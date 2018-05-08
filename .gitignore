@@ -14,6 +14,7 @@ build
 
 # Packed builds
 *.crx
+*.zip
 
 # private keys
 *.pem

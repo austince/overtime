@@ -97,7 +97,7 @@
 
 <template>
 
-    <main id="app">
+    <main id="app" ref="app">
         <section id="bg">
         </section>
         <section class="main-content">
@@ -120,6 +120,7 @@
                 <article class="photo"
                          v-for="photo of photos">
                     <ImageThumbnail :photo="photo"
+                                    :lock="thumbnailLock"
                                     :tracker="thumbnailTracker">
                     </ImageThumbnail>
                 </article>
@@ -173,8 +174,10 @@
       // So we can reuse it for each photo thumbnail
       this.thumbnailTracker = new clm.tracker({useWebGL: true})
       this.thumbnailTracker.init(PCAEmotionalModel)
+      this.thumbnailLock = new Lock()
     },
     mounted () {
+      this.clmTracker.setEventDispatcher(this.$refs.app)
       this.checkIfNeedsPhoto()
     },
     methods: {
@@ -213,7 +216,7 @@
         const imgToAdd = new OvertimeImage({photoId: photo.id, data: photo.data})
         imgToAdd.id = await ImagesDB.add(imgToAdd)
 
-        await chromep.storage.local.set({[LAST_PHOTO_KEY]: photo.timestamp})
+        await chromep.storage.local.set({[LAST_PHOTO_KEY]: photo.timestparamsamp})
 
         const getMaxEmotion = (emotionData) => {
           return emotionData.reduce((em, otherEm) => {
@@ -280,6 +283,7 @@
       }) {
         return new Promise(((resolve, reject) => {
           let emotionData = this.emotionClassifier.blankPrediction()
+          const eventElem = this.$refs.app
 
           const successHandler = (event) => {
             cleanup()
@@ -314,7 +318,7 @@
 
           const setupHandlers = () => {
             for (const [eventType, handler] of Object.entries(eventHandlers)) {
-              document.addEventListener(eventType, handler, true)
+              eventElem.addEventListener(eventType, handler, true)
             }
             console.log('Done handler setup')
           }
@@ -323,7 +327,7 @@
             this.clmTracker.stop()
 
             for (const [eventType, handler] of Object.entries(eventHandlers)) {
-              document.removeEventListener(eventType, handler, true)
+              eventElem.removeEventListener(eventType, handler, true)
             }
             console.log('Done handler teardown')
           }
