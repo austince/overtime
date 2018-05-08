@@ -154,6 +154,12 @@
     },
 
     created () {
+      this.eventHandlers = {
+        'clmtrackrConverged': this.trackEventhandler.bind(this),
+        'clmtrackrIteration': this.trackEventhandler.bind(this),
+        'clmtrackrLost': this.trackEventhandler.bind(this),
+        'clmtrackrNotFound': this.trackEventhandler.bind(this),
+      }
     },
     mounted () {
       this.loaded = new Promise(resolve => {
@@ -191,45 +197,47 @@
       },
       stopAnimation () {
         const {clmOverlay} = this.$refs
+        this.tearDownTrackHandlers()
         this.tracker.stop()
         this.tracker.reset()
-        this.lock.release()
+        if (this.hasLock) {
+          console.log("Releasing lock!")
+          this.lock.release()
+          this.hasLock = false
+        }
         cancelAnimationFrame(this.drawRequest)
         this.isDrawing = false
         this.overlayCtx.clearRect(0, 0, clmOverlay.width, clmOverlay.height)
       },
       async startAnimation () {
+        this.hasLock = false
+
         await this.lock.acquire()
-        // detect if tracker fails to find a face
-        const evtHandler = (event, ...args) => {
-          cleanup()
-          this.stopAnimation()
+        if (!this.isHovering) {
+          this.lock.release();
+          return;
         }
+        console.log("Animating!")
 
-        const eventHandlers = {
-          'clmtrackrConverged': evtHandler.bind(this),
-          'clmtrackrIteration': evtHandler.bind(this),
-          'clmtrackrLost': evtHandler.bind(this),
-          'clmtrackrNotFound': evtHandler.bind(this),
-        }
-
-        const setupHandlers = () => {
-          for (const [eventType, handler] of Object.entries(eventHandlers)) {
-            this.$refs.root.addEventListener(eventType, handler, true)
-          }
-          console.log('Done handler setup')
-        }
-
-        const cleanup = () => {
-          for (const [eventType, handler] of Object.entries(eventHandlers)) {
-            this.$refs.root.removeEventListener(eventType, handler, true)
-          }
-          console.log('Done handler teardown')
-        }
-
-        setupHandlers()
-
+        this.hasLock = true
+        this.setupTrackHandlers()
         this.animate(this.photo.getFaceBox())
+      },
+      setupTrackHandlers() {
+        for (const [eventType, handler] of Object.entries(this.eventHandlers)) {
+          this.$refs.root.addEventListener(eventType, handler, true)
+        }
+        console.log('Done handler setup')
+      },
+      trackEventhandler(event) {
+        console.log(event)
+        this.stopAnimation()
+      },
+      tearDownTrackHandlers() {
+        for (const [eventType, handler] of Object.entries(this.eventHandlers)) {
+          this.$refs.root.removeEventListener(eventType, handler, true)
+        }
+        console.log('Done handler teardown')
       },
     }
   }
