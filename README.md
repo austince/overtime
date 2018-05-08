@@ -1,8 +1,7 @@
 <div align="center">
 <img src="./static/icons/icon128.png" height="126" >  
+<h1>overtime</h1>
 </div>  
-
-# Overtime
 
 Day-to-day emotions are too easily forgotten about. Don't let them escape.
 _Overtime_ is a Chrome extension that help you keep track of your emotions when you
