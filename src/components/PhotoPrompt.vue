@@ -69,20 +69,19 @@
       console.log('mounted')
       this.tracker.on('track', async (event) => {
         if (event.data.length > 0) {
-          let largestFace = event.data.reduce((faceData, largestSoFar) => {
-            return faceData.height * faceData.width > largestSoFar.width * largestSoFar.height ? faceData : largestSoFar
-          }, { width: 0, height: 0})
-
           console.log('Found faces!')
 
           if (!this.hasTakenPhoto) {
+            this.hasTakenPhoto = true
+
+            let largestFace = event.data.reduce((faceData, largestSoFar) => {
+              return faceData.height * faceData.width > largestSoFar.width * largestSoFar.height ? faceData : largestSoFar
+            }, { width: 0, height: 0})
+
             console.log('Taking photo!')
 
-            this.hasTakenPhoto = true
-            this.stopTracking()
             const photo = this.takePhoto(largestFace)
             this.$emit('photoTaken', photo)
-          } else {
             this.stopTracking()
           }
         }
@@ -97,7 +96,12 @@
         this.hasTakenPhoto = false
       },
       stopTracking () {
-        this.currentTrackingTask.stop()
+        this.currentTrackingTask.stop() // stops animation frame loop
+        // manually shut off all video tracks
+        const stream = this.$refs.videoCapture.captureStream();
+        for (let track of [...stream.getVideoTracks(), ...stream.getAudioTracks()]) {
+          track.stop()
+        }
         this.isTracking = false
       },
       toggleTracking () {

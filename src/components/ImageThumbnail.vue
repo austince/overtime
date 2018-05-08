@@ -71,7 +71,7 @@
 <template>
     <section class="thumbnail"
              @mouseenter="startAnimation"
-             @mouseleave="stopTracking">
+             @mouseleave="stopAnimation">
         <div :class="[photoEmotion, 'overlay']"
              :style="{ opacity: opacity }">
         </div>
@@ -107,8 +107,11 @@
         if (this.photo.emotionValue) {
           return mapBetween(this.photo.emotionValue, 0, 1, MIN_OPACITY, MAX_OPACITY)
         }
-        return MIN_OPACITY
+        return MAX_OPACITY
       },
+      overlayCtx() {
+        return this.$refs.clmOverlay.getContext('2d')
+      }
     },
     data () {
       return {}
@@ -120,8 +123,6 @@
       this.loaded = new Promise(resolve => {
         this.$refs.image.onload = resolve
       }).then(() => this.isLoaded = true)
-
-      this.overlayCtx = this.$refs.clmOverlay.getContext('2d')
     },
     methods: {
       animate (box) {
@@ -140,9 +141,11 @@
         this.drawRequest = requestAnimationFrame(this.drawLoop.bind(this))
       },
       stopAnimation() {
-        this.tracker.stop()
+        const {clmOverlay, tracker} = this.$refs
+        tracker.stop()
         cancelAnimationFrame(this.drawRequest)
         this.isDrawing = false
+        this.overlayCtx.clearRect(0, 0, clmOverlay.width, clmOverlay.height)
       },
       async startAnimation () {
         if (!this.isLoaded) {
@@ -166,9 +169,6 @@
 
         this.animate(this.photo.getFaceBox())
       },
-      stopTracking () {
-        this.isDrawing = false
-      }
     }
   }
 </script>

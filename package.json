@@ -14,10 +14,12 @@
     "element-ui": "^2.0.1",
     "jquery": "^3.3.1",
     "lodash": "^4.17.10",
+    "moment": "^2.22.1",
     "popper.js": "^1.14.3",
     "semaphore-async-await": "^1.5.1",
     "tracking": "^1.1.3",
-    "vue": "^2.5.2"
+    "vue": "^2.5.2",
+    "vue-async-computed": "^3.3.1"
   },
   "scripts": {
     "lint": "eslint --ext .js,.vue src",
@@ -27,6 +29,7 @@
   "devDependencies": {
     "@types/chrome": "^0.0.64",
     "@types/dat.gui": "^0.6.0",
+    "@types/moment": "^2.13.0",
     "@types/tracking": "^1.1.28",
     "archiver": "^2.1.0",
     "babel-core": "^6.26.0",

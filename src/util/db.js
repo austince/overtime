@@ -103,7 +103,7 @@ db.photos.mapToClass(Photo)
  * @return {Dexie.Promise<any>}
  */
 export function joinImages (photoCollection) {
-  return db.transaction('r', PhotosDB, ImagesDB, async () => {
+  return db.transaction('r', [PhotosDB, ImagesDB], async () => {
     return photoCollection.toArray(photos => {
       const imagesProm = photos.map(photo => {
         return ImagesDB.where('photoId').equals(photo.id).toArray()
@@ -125,6 +125,23 @@ export function joinImages (photoCollection) {
 
     })
   })
+}
+
+export function joinImage (photo) {
+  return ImagesDB.where('photoId')
+    .equals(photo.id)
+    .limit(1)
+    .toArray()
+    .then(images => {
+      if (images[1] && images[1][0]) {
+        photo.data = images[1][0]
+      } else {
+        // todo: remove this photo!
+        photo.data = null
+      }
+
+      return photo
+    })
 }
 
 export const PhotosDB = db.photos

@@ -1,3 +1,8 @@
 @import "variables";
-@import "~bootstrap/scss/bootstrap";
 @import "~sass-material-colors";
+
+// Config boostrap so it ain't bloated
+
+$enable-rounded: true;
+
+@import "bootstrap";

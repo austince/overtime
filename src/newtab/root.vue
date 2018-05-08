@@ -1,6 +1,15 @@
 <style lang="scss">
-    @import '../base';
     @import '../reset';
+
+    body {
+        overflow-y: hidden;
+        /* Todo: uncomment when scroll bar is styled */
+        /*overflow-x: scroll;*/
+    }
+</style>
+
+<style lang="scss" scoped>
+    @import '../base';
 
     $photo-width: 320px;
     $photo-height: 240px;
@@ -10,10 +19,6 @@
     @mixin picture-overflow-height {
         overflow-y: hidden;
         height: calc(100% + #{$photo-height});
-    }
-
-    body {
-        overflow-y: hidden;
     }
 
     #bg {
@@ -27,14 +32,16 @@
         width: 100%;
         height: 100%;
         background: $bg-color;
+    }
 
+    .main-content {
         display: flex;
-        align-items: center;
-        justify-content: center;
+        width: 100%;
+        height: 100%;
     }
 
     #capture {
-        z-index: 1;
+        /*z-index: 1;*/
         width: 640px;
         height: 480px;
         visibility: hidden;
@@ -45,8 +52,7 @@
         flex-wrap: wrap;
         flex-direction: column;
         justify-content: flex-start;
-        height: calc(100% + #{$photo-height});
-        position: absolute;
+        height: calc(100% + #{$photo-height / 4});
         top: 0;
         left: 0;
         z-index: 0;
@@ -58,6 +64,11 @@
         height: $photo-height / 2;
     }
 
+    #profile {
+        width: 40%;
+        height: 100%;
+        z-index: 1;
+    }
 
 </style>
 
@@ -66,24 +77,30 @@
     <main id="app">
         <section id="bg">
         </section>
+        <section class="main-content">
+            <section id="profile">
+                <SideProfile ref="profile"
+                             :photo="profilePhoto">
+                </SideProfile>
 
-        <section id="capture">
-            <photo-prompt
-                    width="640"
-                    height="480"
-                    v-if="needsPhotoPrompt"
-                    @photoTaken="handlePhoto">
-            </photo-prompt>
-        </section>
+                <section id="capture">
+                    <PhotoPrompt
+                            width="640"
+                            height="480"
+                            v-if="needsPhotoPrompt"
+                            @photoTaken="handlePhoto">
+                    </PhotoPrompt>
+                </section>
+            </section>
 
-
-        <section id="photo-wall">
-            <div class="photo"
-                 v-for="photo of photos">
-                <img-thumbnail :photo="photo"
-                               :tracker="thumbnailTracker">
-                </img-thumbnail>
-            </div>
+            <section id="photo-wall">
+                <article class="photo"
+                         v-for="photo of photos">
+                    <ImageThumbnail :photo="photo"
+                                    :tracker="thumbnailTracker">
+                    </ImageThumbnail>
+                </article>
+            </section>
         </section>
     </main>
 
@@ -94,15 +111,15 @@
   import clm from 'clmtrackr'
   import {Lock} from 'semaphore-async-await'
 
-  import PhotoPromptComponent from '../components/PhotoPrompt'
-  import ThumbnailComponent from '../components/Thumbnail'
+  import PhotoPrompt from '../components/PhotoPrompt'
+  import ImageThumbnail from '../components/ImageThumbnail'
 
-  import {captureVideoFrame} from '../util/captureVideoFrame'
   import Photo from '../util/db-models/photo'
   import OvertimeImage from '../util/db-models/overtime-image'
-  import {ImagesDB, PhotosDB, joinImages} from '../util/db'
+  import {db, ImagesDB, PhotosDB, joinImages, joinImage} from '../util/db'
   import {EmotionsModel, PCAEmotionalModel} from '../util/face-models'
   import EmotionClassifier from '../util/emotion-classifier'
+  import SideProfile from '../components/SideProfile'
 
   const LAST_PHOTO_KEY = 'LAST_PHOTO'
   const MS_PER_MIN = 1000 * 60
@@ -120,6 +137,7 @@
         needsPhotoPrompt: false,
         photos: [],
         currentTrackingTask: null,
+        profilePhoto: new Photo({}),
       }
     },
     computed: {},
@@ -130,6 +148,7 @@
       this.clmTracker = new clm.tracker({stopOnConvergence: true, useWebGL: true})
       this.clmTracker.init(PCAEmotionalModel)
 
+      // So we can reuse it for each photo thumbnail
       this.thumbnailTracker = new clm.tracker({useWebGL: true})
       this.thumbnailTracker.init(PCAEmotionalModel)
     },
@@ -140,7 +159,8 @@
       async checkIfNeedsPhoto () {
         const res = await chromep.storage.local.get([LAST_PHOTO_KEY])
         console.log(res)
-        if (!res[LAST_PHOTO_KEY] || dateDiffInMins(new Date(res[LAST_PHOTO_KEY])) >= MINS_BETWEEN_PHOTOS) {
+        if (!res[LAST_PHOTO_KEY]
+          || dateDiffInMins(new Date(parseInt(res[LAST_PHOTO_KEY]))) >= MINS_BETWEEN_PHOTOS) {
           this.needsPhotoPrompt = true
         }
         console.log(`Done photo check. Needs prompt? ${this.needsPhotoPrompt}`)
@@ -151,7 +171,11 @@
         const updateLock = new Lock()
 
         // insert at head, as newest -> oldest
-        this.photos.splice(0, 0, photo)
+        // this.photos.splice(0, 0, photo)
+        this.profilePhoto.setFromOther(photo)
+
+        // hack to keep refs
+        photo = this.profilePhoto
 
         photo.id = await PhotosDB.add(Photo.copyForDB(photo))
 
@@ -291,16 +315,37 @@
           .limit(100)
           .reverse()
 
-        const photos = await joinImages(col)
+        // Todo: Batch joins, not singular and not total
+        await db.transaction('r', [PhotosDB, ImagesDB], async () => {
+          return col.each(photo => {
+            const imgProm = ImagesDB.where('photoId')
+              .equals(photo.id)
+              .limit(1)
+              .toArray()
 
-        photos.forEach(photo => {
-          this.photos.push(photo)
+            return imgProm.then(images => {
+              if (images[0]) {
+                photo.data = images[0].data
+              } else {
+                // todo: remove this photo!
+                photo.data = null
+              }
+
+              this.photos.push(photo)
+            })
+          })
         })
+        // const photos = await joinImages(col)
+        //
+        // photos.forEach(photo => {
+        //   this.photos.push(photo)
+        // })
       }
     },
     components: {
-      [PhotoPromptComponent.is]: PhotoPromptComponent,
-      [ThumbnailComponent.is]: ThumbnailComponent,
+      SideProfile,
+      PhotoPrompt,
+      ImageThumbnail,
     }
   }
 </script>
