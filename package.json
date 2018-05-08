@@ -25,7 +25,9 @@
     "lint": "eslint --ext .js,.vue src",
     "dev": "webpack --config ./core/webpack.dev.js --hide-modules",
     "dev:no-reload": "yarn run dev --env.no_reload=true",
-    "build": "webpack --config ./core/webpack.prod.js -p --progress  --hide-modules --colors"
+    "clean": "rm -rf build overtime.zip *.crx",
+    "build": "webpack --config ./core/webpack.prod.js -p --progress  --hide-modules --colors",
+    "build:upload": "yarn build && zip -r overtime.zip ./build"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.64",

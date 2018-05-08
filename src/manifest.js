@@ -1,8 +1,10 @@
 
 module.exports = {
   name: 'Overtime',
-  version: '1.0.0',
-  description: '',
+  version: '1.0.1',
+  short_name: '',
+  default_locale: 'en',
+  description: "Don't let your emotions get away.",
   author: 'austin ce <austin.cawley@gmail.com>',
   manifest_version: 2,
   icons: {

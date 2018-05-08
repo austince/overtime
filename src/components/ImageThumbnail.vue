@@ -88,6 +88,7 @@
 
 <template>
     <section class="thumbnail"
+             ref="root"
              @mouseenter="startHover"
              @mouseleave="stopHover">
         <div :class="[photoEmotion, 'overlay']"
@@ -119,7 +120,8 @@
     is: 'img-thumbnail',
     props: [
       'tracker',
-      'photo'
+      'photo',
+      'lock'
     ],
     data () {
       return {
@@ -191,11 +193,13 @@
         const {clmOverlay} = this.$refs
         this.tracker.stop()
         this.tracker.reset()
+        this.lock.release()
         cancelAnimationFrame(this.drawRequest)
         this.isDrawing = false
         this.overlayCtx.clearRect(0, 0, clmOverlay.width, clmOverlay.height)
       },
       async startAnimation () {
+        await this.lock.acquire()
         // detect if tracker fails to find a face
         const evtHandler = (event, ...args) => {
           cleanup()
@@ -211,14 +215,14 @@
 
         const setupHandlers = () => {
           for (const [eventType, handler] of Object.entries(eventHandlers)) {
-            document.addEventListener(eventType, handler, true)
+            this.$refs.root.addEventListener(eventType, handler, true)
           }
           console.log('Done handler setup')
         }
 
         const cleanup = () => {
           for (const [eventType, handler] of Object.entries(eventHandlers)) {
-            document.removeEventListener(eventType, handler, true)
+            this.$refs.root.removeEventListener(eventType, handler, true)
           }
           console.log('Done handler teardown')
         }
