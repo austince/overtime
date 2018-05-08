@@ -1,5 +1,5 @@
 <div align="center">
-<img src="./static/icons/icon512.png" height="512" >  
+<img src="./static/icons/icon128.png" height="126" >  
 </div>  
 <br><br>
 
