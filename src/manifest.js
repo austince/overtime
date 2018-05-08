@@ -5,7 +5,13 @@ module.exports = {
   description: '',
   author: 'austin ce <austin.cawley@gmail.com>',
   manifest_version: 2,
-  icons: { '16': 'icons/16.png', '128': 'icons/128.png' },
+  icons: {
+    '16': 'icons/icon16.png',
+    '32': 'icons/icon32.png',
+    '64': 'icons/icon64.png',
+    '128': 'icons/icon128.png' ,
+    '512': 'icons/icon512.png',
+  },
   permissions: [
     'background',
     'storage',
