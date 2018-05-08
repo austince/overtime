@@ -7,11 +7,19 @@ const pkg = require('../package.json');
 let resolve = dir => path.join(__dirname, '..', 'src', dir)
 module.exports = {
   entry: {
+    // tab: resolve('./tab'),
+    // popup: resolve('./popup'),
+    // options: resolve('./options'),
+    // content: resolve('./content'),
+    // devtools: resolve('./devtools'),
+    // background: resolve('./backend'),
+    // panel: resolve('./devtools/panel'),
+    // inject: resolve('./content/inject'),
     newtab: resolve('./newtab'),
     popup: resolve('./popup'),
     options: resolve('./options'),
     background: resolve('./backend'),
-    vendor: ['vue', 'dexie', 'chrome-promise', 'bootstrap'],
+    // vendor: ['vue', 'dexie', 'chrome-promise', 'bootstrap'],
   },
   output: {
     path: path.join(__dirname, '..', 'build'),
@@ -78,13 +86,6 @@ module.exports = {
     ]
   },
   plugins: [
-    // Extract all 3rd party modules into a separate 'vendor' chunk
-    // new webpack.optimize.CommonsChunkPlugin({
-    //   name: 'vendor',
-    //   // minChunks: ({ resource }) => /node_modules/.test(resource),
-    //   minChunks: Infinity,
-    // }),
-
     htmlPage('New Tab', 'newtab', ['newtab']),
     htmlPage('popup', 'popup', ['popup']),
     htmlPage('options', 'options', ['options']),
@@ -93,5 +94,5 @@ module.exports = {
     new CopyWebpackPlugin([{ from: path.join(__dirname, '..', 'static') }]),
 
   ],
-  performance: { hints: false },
+  performance: { hints: "warning" },
 }

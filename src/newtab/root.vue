@@ -1,10 +1,32 @@
 <style lang="scss">
+    @import '../base';
     @import '../reset';
+
+    html {
+        font-size: 0.8rem;
+    }
+
+    @include media-breakpoint-up(sm) {
+        html {
+            font-size: 1rem;
+        }
+    }
+
+    @include media-breakpoint-up(md) {
+        html {
+            font-size: 1.2rem;
+        }
+    }
+
+    @include media-breakpoint-up(lg) {
+        html {
+            font-size: 1.2rem;
+        }
+    }
 
     body {
         overflow-y: hidden;
-        /* Todo: uncomment when scroll bar is styled */
-        /*overflow-x: scroll;*/
+        /* Todo: scroll bar style */
     }
 </style>
 
@@ -26,6 +48,7 @@
         width: 100%;
         height: 100%;
         background: $bg-color;
+        z-index: -1;
     }
 
     #app {
@@ -55,7 +78,7 @@
         height: calc(100% + #{$photo-height / 4});
         top: 0;
         left: 0;
-        z-index: 0;
+        /*z-index: 0;*/
         background: $bg-color;
     }
 
@@ -67,7 +90,7 @@
     #profile {
         width: 40%;
         height: 100%;
-        z-index: 1;
+        /*z-index: 1;*/
     }
 
 </style>
@@ -93,7 +116,7 @@
                 </section>
             </section>
 
-            <section id="photo-wall">
+            <section id="photo-wall" ref="photoWall">
                 <article class="photo"
                          v-for="photo of photos">
                     <ImageThumbnail :photo="photo"
@@ -109,6 +132,7 @@
 <script>
   import chromep from 'chrome-promise'
   import clm from 'clmtrackr'
+  import moment from 'moment'
   import {Lock} from 'semaphore-async-await'
 
   import PhotoPrompt from '../components/PhotoPrompt'
@@ -123,12 +147,10 @@
 
   const LAST_PHOTO_KEY = 'LAST_PHOTO'
   const MS_PER_MIN = 1000 * 60
-  const MINS_BETWEEN_PHOTOS = 5
+  const MINS_BETWEEN_PHOTOS = 0.5
 
-  function dateDiffInMins (date, other = (new Date())) {
-    const utc1 = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())
-    const utc2 = Date.UTC(other.getFullYear(), other.getMonth(), other.getDate())
-    return Math.floor((utc2 - utc1) / MS_PER_MIN)
+  function dateDiff (date, other = moment()) {
+    return moment.duration(other.diff(date))
   }
 
   export default {
@@ -158,11 +180,19 @@
     methods: {
       async checkIfNeedsPhoto () {
         const res = await chromep.storage.local.get([LAST_PHOTO_KEY])
-        console.log(res)
-        if (!res[LAST_PHOTO_KEY]
-          || dateDiffInMins(new Date(parseInt(res[LAST_PHOTO_KEY]))) >= MINS_BETWEEN_PHOTOS) {
+        if (!res || !res[LAST_PHOTO_KEY]) {
           this.needsPhotoPrompt = true
+        } else {
+          const lastTakenDate = new Date(parseInt(res[LAST_PHOTO_KEY]))
+
+          const diff = dateDiff(lastTakenDate)
+          if (diff.asMinutes() >= MINS_BETWEEN_PHOTOS) {
+            this.needsPhotoPrompt = true
+          } else {
+            setTimeout(this.checkIfNeedsPhoto.bind(this), diff.asMilliseconds() + 5)
+          }
         }
+
         console.log(`Done photo check. Needs prompt? ${this.needsPhotoPrompt}`)
       },
 
@@ -183,7 +213,7 @@
         const imgToAdd = new OvertimeImage({photoId: photo.id, data: photo.data})
         imgToAdd.id = await ImagesDB.add(imgToAdd)
 
-        await chromep.storage.local.set({LAST_PHOTO_KEY: photo.timestamp})
+        await chromep.storage.local.set({[LAST_PHOTO_KEY]: photo.timestamp})
 
         const getMaxEmotion = (emotionData) => {
           return emotionData.reduce((em, otherEm) => {
@@ -199,11 +229,12 @@
          */
         const updatePhotoEmotion = async (emotionData) => {
           const {emotion, value} = getMaxEmotion(emotionData)
-          photo.setEmotion({emotion, value})
+
           // Enter the crit zone
           await updateLock.acquire()
 
           try {
+            photo.setEmotion({emotion, value})
             // console.log(`Updating emotion of ${photo.id} to ${emotion}:${value}`)
             await PhotosDB.update(photo.id, {emotion, emotionValue: value})
             // console.log(`Updated emotion of ${photo.id}`)

@@ -33,7 +33,7 @@ module.exports = env => {
     // cheap-module-eval-source-map
     watch: true,
     module: {
-      rules: styleLoaders({sourceMap: false})
+      rules: styleLoaders({sourceMap: true})
     },
     devtool: '#cheap-module-eval-source-map',
     plugins,

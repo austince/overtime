@@ -1,6 +1,8 @@
 <style scoped lang="scss">
     @import '../base';
 
+    $photo-width: 75%;
+
     .profile {
         height: 100%;
         width: 100%;
@@ -11,10 +13,15 @@
         justify-content: center;
     }
 
-    $photo-width: 75%;
+    img.placeholder {
+        width: 50%;
+        filter: invert(100%); // make it white
+    }
+
     .photo {
         position: relative;
         width: $photo-width;
+        box-shadow: 0 0 50px $black;
 
         img {
             // Todo: Portrait, need to resize image, center on face
@@ -24,11 +31,9 @@
         }
     }
 
-    img.placeholder {
-        width: 50%;
-    }
-
     .photo-details {
+        @include text-border($text-border-width * 2);
+
         position: absolute;
         width: 100%;
         text-align: center;
@@ -37,7 +42,6 @@
         margin: 0;
 
         p {
-            background: $black;
             padding: 8px;
         }
     }
@@ -47,17 +51,37 @@
         display: flex;
         flex-direction: column;
         max-width: 75%;
-        text-align: center;
+        text-align: left;
+
+        @media only screen and (min-width: map-get($grid-breakpoints, "sm")) {
+            max-width: 95%;
+        }
+
+        .row {
+            margin: 0 4px;
+            @include text-border($text-border-width * 2);
+        }
+
+        input[type=text] {
+            // @include text-border($text-border-width * 2);
+            padding: 8px;
+            margin: 8px auto 16px;
+            display: inline-block;
+            text-align: center;
+            text-transform: uppercase;
+            border-width: 4px;
+
+            @media only screen and (min-width: map-get($grid-breakpoints, "sm")) {
+                max-width: 75%;
+            }
+
+            @media only screen and (min-width: map-get($grid-breakpoints, "md")) {
+                max-width: 50%;
+            }
+        }
 
         input[type=text],
         input[type=text]:focus {
-            width: 100%;
-            padding: 12px 16px;
-            margin: 8px 0;
-            display: inline-block;
-            border: none;
-            text-transform: uppercase;
-            text-align: center;
             background-color: $transparent;
             outline-color: $transparent;
         }
@@ -70,7 +94,7 @@
             <section class="photo">
                 <img :src="photo.data"/>
                 <article class="photo-details text-white h5">
-                    <p>{{photo.emotion}}</p>
+                    <p v-if="photo.emotion">{{photo.emotion}}</p>
                     <p>{{photoDate}}</p>
                 </article>
             </section>
@@ -84,12 +108,23 @@
         <section class="profile-details">
             <input class="name h1 text-white font-weight-bold"
                    type="text"
+                   maxlength="14"
+                   placeholder="You?"
                    v-model="name"
                    @change="saveName"/>
-            <template v-for="emotion in averageEmotions">
-                <p class="h2 text-white"><b class="text-uppercase">{{emotion.days}} days</b> since {{emotion.emotion}}
-                </p>
-            </template>
+            <article class="container-fluid">
+                <template v-for="emotion in sinceEmotions">
+                    <div v-if="emotion"
+                         class="row">
+                        <h3 class="difference col-md-5 col-sm-6 text-white font-weight-bold text-uppercase">
+                            {{emotion.since}}
+                        </h3>
+                        <div class="col-md-1 hidden-sm-and-down"></div>
+                        <h4 class="col-md-6 col-sm-6 text-white">since {{emotion.emotion}}</h4>
+                    </div>
+                </template>
+            </article>
+
         </section>
     </main>
 </template>
@@ -97,6 +132,7 @@
 <script>
   import chromep from 'chrome-promise'
   import moment from 'moment'
+  import {PhotosDB} from '../util/db'
 
   const NAME_KEY = 'name'
 
@@ -107,18 +143,10 @@
     ],
     data () {
       return {
-        name: ''
+        name: '',
       }
     },
     computed: {
-      averageEmotions () {
-        return [
-          {days: 10, emotion: 'sad'},
-          {days: 0, emotion: 'happy'},
-          {days: 15, emotion: 'angry'},
-          {days: 8, emotion: 'surprised'},
-        ]
-      },
       photoDate () {
         if (!this.photo.timestamp) return ''
 
@@ -126,14 +154,37 @@
       }
     },
     asyncComputed: {
-      // async name () {
-      //   const res = await chromep.storage.local.get([NAME_KEY])
-      //   if (res[NAME_KEY]) {
-      //     return res[NAME_KEY]
-      //   }
-      //
-      //   return 'you'
-      // }
+      async sinceEmotions () {
+        const emotions = ['happy', 'sad', 'surprised', 'angry']
+
+        return Promise.all(emotions.map(async emotion => {
+          const mostRecentPhoto = await PhotosDB
+            .where('emotion').equals(emotion)
+            .limit(1)
+            .reverse()
+            .sortBy('timestamp')
+
+          if (mostRecentPhoto.length >= 0 && typeof mostRecentPhoto[0] !== 'undefined') {
+            const mostRecentDate = moment(parseInt(mostRecentPhoto[0].timestamp))
+            const takenAt = moment.duration(moment().diff(mostRecentDate))
+            const days = Math.floor(takenAt.asDays())
+            return {
+              since: `${days} ${days === 1 ? 'day' : 'days'}`,
+              sinceDays: days,
+              emotion,
+            }
+          }
+
+
+        }))
+
+        // return [
+        //   {since: 10, emotion: 'sad'},
+        //   {since: 0, emotion: 'happy'},
+        //   {since: 15, emotion: 'angry'},
+        //   {since: 8, emotion: 'surprised'},
+        // ]
+      },
     },
     created () {
       this.loadName()
@@ -146,12 +197,11 @@
         if (res[NAME_KEY]) {
           this.name = res[NAME_KEY]
         } else {
-          this.name = 'you'
+          this.name = ''
         }
       },
       async saveName () {
         const res = await chromep.storage.local.set({[NAME_KEY]: this.name})
-        console.log('Saved name!', this.name, res)
       }
     },
   }

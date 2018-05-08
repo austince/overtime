@@ -18,14 +18,15 @@ module.exports = {
   // },
   background: {
     persistent: false,
-    page: 'pages/background.html'
+    page: 'pages/background.html',
   },
   "chrome_url_overrides": {
-    "newtab": "pages/newtab.html"
+    "newtab": "pages/newtab.html",
   },
   "options_ui": {
     "chrome_style": true,
-    "page": "pages/options.html"
+    // "open_in_tab": true,
+    "page": "pages/options.html",
   },
-  content_security_policy: "script-src 'self' 'unsafe-eval'; object-src 'self'"
+  content_security_policy: "script-src 'unsafe-inline'"
 }

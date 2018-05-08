@@ -1,0 +1,10 @@
+@import "variables";
+
+$text-border-width: 0.0625rem !default;
+
+@mixin text-border($border-width: $text-border-width, $color: $black) {
+  text-shadow: #{$border-width} #{$border-width} 0 $color,
+  #{$border-width} #{$border-width} 0 $color,
+  #{$border-width} #{$border-width} 0 $color,
+  #{$border-width} #{$border-width} 0 $color;
+}

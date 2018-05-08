@@ -1,9 +1,9 @@
 <style scoped lang="scss">
     @import '../base';
 
-    $happy: material-color('green', '500');
+    $happy: material-color('yellow', '500');
     $sad: material-color('indigo', '500');
-    $surprised: material-color('yellow', '500');
+    $surprised: material-color('green', '500');
     $angry: material-color('red', '500');
     $unknown: material-color('grey', '500');
 
@@ -41,6 +41,24 @@
         .overlay {
             @include stacked(3);
         }
+
+        .photo-details {
+            @include stacked(4);
+            @include text-border(1px);
+
+            text-align: center;
+            text-transform: uppercase;
+            bottom: 0;
+            margin: 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+
+            & > * {
+                margin: 0 2px;
+            }
+        }
     }
 
     .overlay {
@@ -70,18 +88,26 @@
 
 <template>
     <section class="thumbnail"
-             @mouseenter="startAnimation"
-             @mouseleave="stopAnimation">
+             @mouseenter="startHover"
+             @mouseleave="stopHover">
         <div :class="[photoEmotion, 'overlay']"
              :style="{ opacity: opacity }">
         </div>
         <canvas ref="clmOverlay"></canvas>
         <img :src="photo.data"
              ref="image"/>
+
+        <article :class="[isHovering ? 'visible' : 'invisible', 'photo-details', 'text-white', 'h5']">
+            <h4>{{photo.emotion || 'unknown'}}</h4>
+            <h4>{{photoDate}}</h4>
+        </article>
     </section>
 </template>
 
 <script>
+  import moment from 'moment'
+  import { PhotosDB } from '../util/db'
+
   const MAX_OPACITY = 0.5
   const MIN_OPACITY = 0.01
 
@@ -95,6 +121,12 @@
       'tracker',
       'photo'
     ],
+    data () {
+      return {
+        loaded: false,
+        isHovering: false,
+      }
+    },
     computed: {
       photoEmotion () {
         if (this.photo.emotion) {
@@ -109,15 +141,17 @@
         }
         return MAX_OPACITY
       },
-      overlayCtx() {
+      overlayCtx () {
         return this.$refs.clmOverlay.getContext('2d')
+      },
+      photoDate () {
+        if (!this.photo.timestamp) return ''
+
+        return (moment(parseInt(this.photo.timestamp))).format('h:mm A MM/DD/YY')
       }
     },
-    data () {
-      return {}
-    },
+
     created () {
-        this.loaded = false
     },
     mounted () {
       this.loaded = new Promise(resolve => {
@@ -125,6 +159,19 @@
       }).then(() => this.isLoaded = true)
     },
     methods: {
+      async startHover() {
+        this.isHovering = true
+
+        if (!this.isLoaded) {
+          await this.loaded
+        }
+
+        this.startAnimation()
+      },
+      stopHover () {
+        this.isHovering = false
+        this.stopAnimation()
+      },
       animate (box) {
         this.isDrawing = true
         this.tracker.start(this.$refs.image, box)
@@ -140,32 +187,43 @@
 
         this.drawRequest = requestAnimationFrame(this.drawLoop.bind(this))
       },
-      stopAnimation() {
-        const {clmOverlay, tracker} = this.$refs
-        tracker.stop()
+      stopAnimation () {
+        const {clmOverlay} = this.$refs
+        this.tracker.stop()
+        this.tracker.reset()
         cancelAnimationFrame(this.drawRequest)
         this.isDrawing = false
         this.overlayCtx.clearRect(0, 0, clmOverlay.width, clmOverlay.height)
       },
       async startAnimation () {
-        if (!this.isLoaded) {
-          await this.loaded
+        // detect if tracker fails to find a face
+        const evtHandler = (event, ...args) => {
+          cleanup()
+          this.stopAnimation()
         }
 
-        // detect if tracker fails to find a face
-        document.addEventListener('clmtrackrNotFound', (event) => {
-          this.stopAnimation()
-        }, false)
+        const eventHandlers = {
+          'clmtrackrConverged': evtHandler.bind(this),
+          'clmtrackrIteration': evtHandler.bind(this),
+          'clmtrackrLost': evtHandler.bind(this),
+          'clmtrackrNotFound': evtHandler.bind(this),
+        }
 
-        // detect if tracker loses tracking of face
-        document.addEventListener('clmtrackrLost', (event) => {
-          this.stopAnimation()
-        }, false)
+        const setupHandlers = () => {
+          for (const [eventType, handler] of Object.entries(eventHandlers)) {
+            document.addEventListener(eventType, handler, true)
+          }
+          console.log('Done handler setup')
+        }
 
-        // detect if tracker has converged
-        document.addEventListener('clmtrackrConverged', (event) => {
-          this.stopAnimation()
-        }, false)
+        const cleanup = () => {
+          for (const [eventType, handler] of Object.entries(eventHandlers)) {
+            document.removeEventListener(eventType, handler, true)
+          }
+          console.log('Done handler teardown')
+        }
+
+        setupHandlers()
 
         this.animate(this.photo.getFaceBox())
       },

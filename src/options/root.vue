@@ -27,6 +27,11 @@
     },
     computed: {},
     created () {
+      navigator.getUserMedia({audio: false, video: true}, () => {
+        console.log('webcam ok');
+      }, (err) => {
+        console.log('webcam not ok');
+      });
     },
     mounted () {
     },
